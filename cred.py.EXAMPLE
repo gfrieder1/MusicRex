@@ -1,0 +1,5 @@
+client_id='YOUR_CLIENT_ID'
+client_secret='YOUR_CLIENT_SECRET'
+redirect_url='http://localhost/'
+
+bot_token='YOUR_BOT_TOKEN'
