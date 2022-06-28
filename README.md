@@ -1,5 +1,6 @@
 # MusicRex
-This Discord bot implements Discord, Spotify, and MongoDB API in order to create a public Spotify playlist that your Discord server's members can all add songs to!
+This Discord bot implements Discord, Spotify, and MongoDB API in order to create a public Spotify playlist that your Discord server's members can all add songs to!\
+https://discord.com/api/oauth2/authorize?client_id=988964938238271488&permissions=3136&scope=bot
 
 # Documentation
 ### Server Managers:
