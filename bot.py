@@ -301,10 +301,11 @@ async def channel(ctx):
         await ctx.send("This server's playlist hasn't been set up yet. Use \"m!config\" to start!")
 
 ##########################
-# m!add
+# add song if valid link
 ##########################
-@bot.command()
-async def add(ctx, uri):
+@bot.event
+async def on_message(message):
+    ctx = await bot.get_context(message)
     serverID = ctx.guild.id
 
     ## If config exists, react to command
@@ -313,18 +314,123 @@ async def add(ctx, uri):
         config = db.configs.find_one({'_id': serverID})
         playlistHref = config['playlistHref']
         channelID = config['channelID']
+        maxSongs = int(config['maxSongs'])
         ## If the message was sent in the target channel, add the track to the server playlist and log event
         if (ctx.message.channel.id == channelID):
-            tracks = [uri]
-            try:
-                sp.user_playlist_add_tracks(user_ID, playlistHref, tracks)
-                ## Success!
-                await ctx.message.add_reaction("🎵")
-            except Exception as e:
-                ## Failure...
-                await ctx.message.add_reaction("❌")
-            finally:
-                print(str(serverID) + " Add Track: " + uri)
+            # gets the first word (" " separated) of the message
+            # i.e. "<spotify_link> I love this song so much omg" OR "I love this song <spotify_link>"
+            words = message.content.split()
+            for x in range(len(words)):
+                #print(x, words[x])
+                if words[x][0:31] != "https://open.spotify.com/track/":
+                    #print(str(words[x]) + " IS NOT A LINK")
+                    continue
+                ## Valid link found!
+                ## Get list of IDs
+                result = sp.playlist_tracks(playlistHref)
+                items = result['items']
+                ids = []
+                # NOTE: This could definitely be refactored...
+                while result['next']:
+                    result = sp.next(result)
+                    items.extend(result['items'])
+                for details in items:
+                    ids.append(details["track"]["id"])
+                #print(ids)
+                try:
+                    sp.user_playlist_add_tracks(user_ID, playlistHref, [words[x]])
+                    ## Victimize oldest song(s) if over maxsongs!!
+                    if len(ids) >= maxSongs:
+                        for y in range(len(ids) - maxSongs + 1):
+                            ## Build removal data object
+                            removeList = [{"uri":ids[y], "positions":[0]}]
+                            #print(removeList)
+                            sp.playlist_remove_specific_occurrences_of_items(playlistHref,removeList)
+                    ## Success!
+                    await ctx.message.add_reaction("🎵")
+                    print(str(serverID) + " Add Track: " + words[x])
+                except Exception as e:
+                    ## Invalid track link
+                    #print(e)
+                    await ctx.message.add_reaction("❌")
+        ## Otherwise, attempt to process the message as a command
+        await bot.process_commands(message)
+    ## No config exists, do nothing on regular messages
+
+# ##########################
+# # m!add
+# ##########################
+# # DEPRECATED --> replaced by "on_message" functionality
+# ##########################
+# @bot.command()
+# async def add(ctx, uri):
+#     serverID = ctx.guild.id
+#
+#     ## If config exists, react to command
+#     if db.configs.find_one({'_id': serverID}) is not None:
+#         ## Load config doc
+#         config = db.configs.find_one({'_id': serverID})
+#         playlistHref = config['playlistHref']
+#         channelID = config['channelID']
+#         ## If the message was sent in the target channel, add the track to the server playlist and log event
+#         if (ctx.message.channel.id == channelID):
+#             tracks = [uri]
+#             try:
+#                 if uri[0:31] != "https://open.spotify.com/track/":
+#                     raise Exception("Not a Spotify track link") # Avoid excessively pinging the Spotify API
+#                 sp.user_playlist_add_tracks(user_ID, playlistHref, tracks)
+#                 ## Success!
+#                 await ctx.message.add_reaction("🎵")
+#             except Exception as e:
+#                 ## Failure...
+#                 await ctx.message.add_reaction("❌")
+#             finally:
+#                 print(str(serverID) + " Add Track: " + uri)
+#     ## No config exists, send error message
+#     else:
+#         ## Failure...
+#         await ctx.send("This server's playlist hasn't been set up yet. Use \"m!config\" to start!")
+
+##########################
+# m!remove
+##########################
+@bot.command(aliases=['rm'])
+@has_permissions(manage_guild=True)
+async def remove(ctx, index):
+    serverID = ctx.guild.id
+    index = int(index)
+
+    ## If config exists, react to command
+    if db.configs.find_one({'_id': serverID}) is not None:
+        ## Load config doc
+        config = db.configs.find_one({'_id': serverID})
+        playlistHref = config['playlistHref']
+        ## Get list of all playlist track data
+        result = sp.playlist_tracks(playlistHref)
+        ## Filter to list of IDs
+        items = result['items']
+        ids = []
+        # NOTE: This could definitely be refactored...
+        while result['next']:
+            result = sp.next(result)
+            items.extend(result['items'])
+        for details in items:
+            ids.append(details["track"]["id"])
+        # print(ids)
+
+        try:
+            ## Build removal data object
+            removeList = [{"uri":ids[index-1], "positions":[index-1]}]
+            #print(removeList)
+            sp.playlist_remove_specific_occurrences_of_items(playlistHref,removeList)
+            ## Success!
+            await ctx.message.add_reaction("🎵")
+        except Exception as e:
+            ## Failure...
+            #print(e)
+            await ctx.message.add_reaction("❌")
+        finally:
+            print(str(serverID) + " Remove Track: " + str(index))
     ## No config exists, send error message
     else:
         ## Failure...
