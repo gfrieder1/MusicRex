@@ -12,5 +12,4 @@ https://discord.com/api/oauth2/authorize?client_id=988964938238271488&permission
 **m!channel** - Set the channel where regular commands must be used
 ### Regular Commands
 **m!help** - Prints this guide (can be used anywhere the bot can see)\
-**m!add** <Spotify Track Link> - Add a song to the server's Spotify playlist\
 **m!get** - Get a direct link to the server's Spotify playlist
