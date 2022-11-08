@@ -167,7 +167,7 @@ async def config(ctx):
     print(str(serverID) + " New Config: " + json.dumps(db.configs.find_one({'_id': serverID})))
 
     ## Success!
-    await ctx.send("🎵 Okay! You're all set up! Go ahead and add a song with \"m!add <spotify link>\"")
+    await ctx.send("🎵 Okay! You're all set up! Go ahead and add songs by posting Spotify links in that channel!")
 
 ##########################
 # m!getconfig
@@ -353,9 +353,8 @@ async def on_message(message):
                     ## Invalid track link
                     #print(e)
                     await ctx.message.add_reaction("❌")
-        ## Otherwise, attempt to process the message as a command
-        await bot.process_commands(message)
-    ## No config exists, do nothing on regular messages
+    ## Finally, attempt to process the message as a command
+    await bot.process_commands(message)
 
 # ##########################
 # # m!add
