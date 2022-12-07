@@ -24,8 +24,12 @@ MONGODB_URI = cred.MONGODB_URI
 # print(MONGODB_URI)
 
 ## Authorizes MusicRex to post "public playlist modifications" to its own Spotify account
+## Commented lines are for first-time setup of Spotify application
+cid = cred.client_id
+csecret = cred.client_secret
+credirect = cred.redirect_url
 scope = "playlist-modify-public"
-sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=cred.client_id, client_secret=cred.client_secret, redirect_uri=cred.redirect_url, scope=scope))
+sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=cid, client_secret=csecret, redirect_uri=credirect, scope=scope))
 
 ## Connect to MongoDB
 client = MongoClient(MONGODB_URI)
@@ -34,17 +38,17 @@ db = client.configsDB
 ## Setup
 if (sp):
     # print("User ID: " + user_ID)
-    print("Spotipy ready.")
-    print(sp)
+    print("[SERVER] Spotipy ready.")
+    print("[SERVER] " + str(sp))
 else:
-    print("Fatal error during Spotipy init")
+    print("[SERVER] Fatal error during Spotipy init")
     raise SystemExit()
 if (db != None):
     # print("User ID: " + user_ID)
-    print("MongoDB ready.")
-    print(db)
+    print("[SERVER] MongoDB ready.")
+    print("[SERVER] " + str(db))
 else:
-    print("Fatal error during MongoDB init")
+    print("[SERVER] Fatal error during MongoDB init")
     raise SystemExit()
 user = sp.current_user()
 user_ID = user['id']
@@ -60,13 +64,13 @@ bot = commands.Bot(command_prefix = 'm!')
 async def on_ready():
     status = str(len(bot.guilds)) + " playlists!"
     await bot.change_presence(status=discord.Status.online, activity=discord.Activity(type=discord.ActivityType.listening, name=status))
-    print("Bot is ready.")
+    print("[SERVER] Bot is ready.")
 
 ## Runs when the bot joins a server
 @bot.event
 async def on_guild_join(guild):
     ## Log event
-    print(str(guild.id) + " has added MusicRex!")
+    print("[SERVER] " + str(guild.id) + " has added MusicRex!")
 
     ## Update status
     status = str(len(bot.guilds)) + " playlists!"
@@ -164,7 +168,7 @@ async def config(ctx):
         db.configs.update_one({'_id': serverID}, {"$set": newConfig})
 
     ## Log event
-    print(str(serverID) + " New Config: " + json.dumps(db.configs.find_one({'_id': serverID})))
+    print("[SERVER] " + str(serverID) + " New Config: " + json.dumps(db.configs.find_one({'_id': serverID})))
 
     ## Success!
     await ctx.send("🎵 Okay! You're all set up! Go ahead and add songs by posting Spotify links in that channel!")
@@ -183,7 +187,7 @@ async def getconfig(ctx):
         config = db.configs.find_one({'_id': serverID})
         await ctx.send(json.dumps(config, sort_keys=True, indent=4))
         ## Log event
-        print(str(serverID) + " GetConfig " + str(config))
+        print("[SERVER] " + str(serverID) + " GetConfig " + str(config))
     ## No config exists, send error message
     else:
         ## Failure...
@@ -215,7 +219,7 @@ async def rename(ctx):
             sp.playlist_change_details(config['playlistHref'], name=config['playlistName'])
             db.configs.update_one({'_id': serverID}, {'$set': config})
             ## Success!
-            print(str(serverID) + " New Config (rename): " + json.dumps(db.configs.find_one({'_id': serverID})))
+            print("[SERVER] " + str(serverID) + " New Config (rename): " + json.dumps(db.configs.find_one({'_id': serverID})))
             await msg.add_reaction("🎵")
         except Exception as e:
             await msg.add_reaction("❌")
@@ -257,7 +261,7 @@ async def maxsongs(ctx):
                 # print("User entered non-integer maxSongs")
                 await msg.add_reaction("❌")
         ## Success!
-        print(str(serverID) + " New Config (maxsongs): " + json.dumps(db.configs.find_one({'_id': serverID})))
+        print("[SERVER] " + str(serverID) + " New Config (maxsongs): " + json.dumps(db.configs.find_one({'_id': serverID})))
     ## No config exists, send error message
     else:
         ## Failure...
@@ -294,7 +298,7 @@ async def channel(ctx):
                 # print("User entered non-integer channelID.")
                 await msg.add_reaction("❌")
         ## Success!
-        print(str(serverID) + " New Config (channel): " + json.dumps(db.configs.find_one({'_id': serverID})))
+        print("[SERVER] " + str(serverID) + " New Config (channel): " + json.dumps(db.configs.find_one({'_id': serverID})))
     ## No config exists, send error message
     else:
         ## Failure...
@@ -317,12 +321,12 @@ async def on_message(message):
         maxSongs = int(config['maxSongs'])
         ## If the message was sent in the target channel, add the track to the server playlist and log event
         if (ctx.message.channel.id == channelID):
-            # gets the first word (" " separated) of the message
+            # gets the words (" " separated) of the message
             # i.e. "<spotify_link> I love this song so much omg" OR "I love this song <spotify_link>"
             words = message.content.split()
             for x in range(len(words)):
                 #print(x, words[x])
-                if words[x][0:31] != "https://open.spotify.com/track/":
+                if words[x][0:31] != "https://open.spotify.com/track/": # not sure why this isn't [0:30] but it works lol
                     #print(str(words[x]) + " IS NOT A LINK")
                     continue
                 ## Valid link found!
@@ -338,17 +342,26 @@ async def on_message(message):
                     ids.append(details["track"]["id"])
                 #print(ids)
                 try:
-                    sp.user_playlist_add_tracks(user_ID, playlistHref, [words[x]])
-                    ## Victimize oldest song(s) if over maxsongs!!
-                    if len(ids) >= maxSongs:
-                        for y in range(len(ids) - maxSongs + 1):
-                            ## Build removal data object
-                            removeList = [{"uri":ids[y], "positions":[0]}]
-                            #print(removeList)
-                            sp.playlist_remove_specific_occurrences_of_items(playlistHref,removeList)
-                    ## Success!
-                    await ctx.message.add_reaction("🎵")
-                    print(str(serverID) + " Add Track: " + words[x])
+                    ## verify song is not already in playlist! (ids contains id)
+                    newsong_id = words[x][31:53]
+                    #print(newsong_id)
+                    if newsong_id not in ids:
+                        sp.user_playlist_add_tracks(user_ID, playlistHref, [newsong_id])
+                        ## Victimize oldest song(s) if over maxsongs!!
+                        if len(ids) >= maxSongs:
+                            for y in range(len(ids) - maxSongs + 1):
+                                ## Build removal data object
+                                removeList = [{"uri":ids[y], "positions":[0]}]
+                                #print(removeList)
+                                sp.playlist_remove_specific_occurrences_of_items(playlistHref,removeList)
+                                print("[SERVER] " + str(serverID) + " Song Victimized")
+                        ## Success!
+                        await ctx.message.add_reaction("🎵")
+                        print("[SERVER] " + str(serverID) + " Add Track: " + words[x])
+                    else:
+                        ## Success!
+                        await ctx.message.add_reaction("🔂")
+                        print("[SERVER] " + str(serverID) + " Add Track (Repeat): " + words[x])
                 except Exception as e:
                     ## Invalid track link
                     #print(e)
@@ -429,7 +442,7 @@ async def remove(ctx, index):
             #print(e)
             await ctx.message.add_reaction("❌")
         finally:
-            print(str(serverID) + " Remove Track: " + str(index))
+            print("[SERVER] " + str(serverID) + " Remove Track: " + str(index))
     ## No config exists, send error message
     else:
         ## Failure...
@@ -451,7 +464,7 @@ async def get(ctx):
         ## If the message was sent in the target channel, add the track to the server playlist and log event
         if (ctx.message.channel.id == channelID):
             await ctx.send(playlistHref)
-            print(str(serverID) + " Get Playlist: " + playlistHref)
+            print("[SERVER] " + str(serverID) + " Get Playlist: " + playlistHref)
     ## No config exists, send error message
     else:
         ## Failure...
